@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Prime Number Checker - Standalone executable
+# This script activates the virtual environment and runs prime-check
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if virtual environment exists
+if [ ! -d "$SCRIPT_DIR/venv" ]; then
+    echo "Error: Virtual environment not found."
+    echo "Please run: ./create_venv.sh"
+    exit 1
+fi
+
+# Activate virtual environment and run prime-check
+source "$SCRIPT_DIR/venv/bin/activate"
+prime-check "$@"

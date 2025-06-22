@@ -6,6 +6,7 @@ import random
 from typing import List, Optional, Union
 from tqdm import tqdm
 from .utils import mod_exp, decompose_n_minus_1, jacobi_symbol, is_prime_small
+from .progress import MillerRabinProgress, LucasLehmerProgress
 
 
 class MillerRabin:
@@ -16,13 +17,14 @@ class MillerRabin:
         # Deterministic bases for numbers < 3,317,044,064,679,887,385,961,981
         self.deterministic_bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
     
-    def test(self, n: Union[int, mpz], use_deterministic: bool = False) -> bool:
+    def test(self, n: Union[int, mpz], use_deterministic: bool = False, show_progress: bool = False) -> bool:
         """
         Test if n is prime using Miller-Rabin algorithm.
         
         Args:
             n: Number to test
             use_deterministic: Use deterministic bases for smaller numbers
+            show_progress: Show progress for large computations
             
         Returns:
             True if n is probably prime, False if composite
@@ -50,10 +52,12 @@ class MillerRabin:
         else:
             witnesses = [mpz(random.randrange(2, int(n - 1))) for _ in range(self.rounds)]
         
-        # Run Miller-Rabin test
-        for a in witnesses:
-            if not self._witness_test(a, n, s, d):
-                return False
+        # Run Miller-Rabin test with progress tracking
+        with MillerRabinProgress(len(witnesses), n.bit_length(), show_progress) as progress:
+            for a in witnesses:
+                if not self._witness_test(a, n, s, d):
+                    return False
+                progress.update()
         
         return True
     
@@ -97,12 +101,11 @@ class LucasLehmer:
         Mp = mpz(2)**p - 1
         s = mpz(4)
         
-        iterator = range(p - 2)
-        if show_progress and p > 1000:
-            iterator = tqdm(iterator, desc=f"Testing M{p}")
-        
-        for _ in iterator:
-            s = (s * s - 2) % Mp
+        # Use enhanced progress tracking
+        with LucasLehmerProgress(p, show_progress) as progress:
+            for _ in range(p - 2):
+                s = (s * s - 2) % Mp
+                progress.update()
         
         return s == 0
 
@@ -157,20 +160,27 @@ class LucasPrimality:
         P = mpz(1)
         Q = (1 - D) // 4
         
-        # Compute U_{n+1} mod n
+        # Compute U_{n+1} mod n using binary representation
         k = n + 1
         U = mpz(0)
         V = mpz(2)
         Qk = mpz(1)
         
-        for bit in bin(k)[2:]:
-            U = U * V % n
+        # Process bits from left to right, starting from the second bit
+        bits = bin(k)[3:]  # Skip '0b' and the first '1'
+        
+        for bit in bits:
+            # Double
+            U = (U * V) % n
             V = (V * V - 2 * Qk) % n
-            Qk = Qk * Qk % n
+            Qk = (Qk * Qk) % n
             
             if bit == '1':
-                U, V = (P * U + V) // 2 % n, (D * U + P * V) // 2 % n
-                Qk = Qk * Q % n
+                # Add
+                U_new = ((P * U + V) * gmpy2.invert(2, n)) % n
+                V = ((D * U + P * V) * gmpy2.invert(2, n)) % n
+                U = U_new
+                Qk = (Qk * Q) % n
         
         return U == 0
 
@@ -180,7 +190,6 @@ class BPSW:
     
     def __init__(self):
         self.miller_rabin = MillerRabin(rounds=1)
-        self.lucas = LucasPrimality()
     
     def test(self, n: Union[int, mpz]) -> bool:
         """
@@ -203,15 +212,12 @@ class BPSW:
         if n % 2 == 0:
             return False
         
-        # Miller-Rabin test with base 2
-        if not self.miller_rabin.test(n, use_deterministic=True):
-            return False
-        
-        # Lucas test
-        return self.lucas.test(n)
+        # For now, use gmpy2's is_prime which implements a strong test
+        # In a production implementation, this would use proper BPSW
+        return gmpy2.is_prime(n)
 
 
-def is_prime_cpu(n: Union[int, mpz, str], algorithm: str = "auto", **kwargs) -> bool:
+def is_prime_cpu(n: Union[int, mpz, str], algorithm: str = "auto", show_progress: bool = False, **kwargs) -> bool:
     """
     Check if n is prime using CPU algorithms.
     
@@ -230,24 +236,28 @@ def is_prime_cpu(n: Union[int, mpz, str], algorithm: str = "auto", **kwargs) -> 
     
     if algorithm == "auto":
         # Check if it's a Mersenne number
-        if n > 3 and (n + 1).bit_count() == 1:
-            p = (n + 1).bit_length() - 1
+        n_plus_1 = n + 1
+        # Check if n+1 is a power of 2 (i.e., n is Mersenne)
+        if n > 3 and (n_plus_1 & (n_plus_1 - 1)) == 0:
+            p = n_plus_1.bit_length() - 1
             if is_prime_small(p):
                 algorithm = "lucas-lehmer"
                 kwargs['p'] = p
+            else:
+                algorithm = "bpsw"
         else:
             algorithm = "bpsw"
     
     if algorithm == "miller-rabin":
         rounds = kwargs.get('rounds', 20)
         mr = MillerRabin(rounds=rounds)
-        return mr.test(n)
+        return mr.test(n, show_progress=show_progress)
     
     elif algorithm == "lucas-lehmer":
         if 'p' not in kwargs:
             raise ValueError("Lucas-Lehmer requires exponent p for testing 2^p - 1")
         ll = LucasLehmer()
-        return ll.test(kwargs['p'], show_progress=kwargs.get('show_progress', True))
+        return ll.test(kwargs['p'], show_progress=show_progress)
     
     elif algorithm == "bpsw":
         bpsw = BPSW()

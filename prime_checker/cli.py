@@ -8,6 +8,7 @@ import gmpy2
 from gmpy2 import mpz
 from .cpu_algorithms import is_prime_cpu
 from .utils import generate_random_probable_prime, generate_mersenne_candidate
+from .progress import BatchProgress, GenerationProgress
 
 try:
     from .gpu_algorithms import is_prime_gpu, find_primes_gpu, GPU_AVAILABLE
@@ -73,7 +74,7 @@ def check(number, algorithm, rounds, use_gpu, verbose):
             if algorithm == 'auto' and number.startswith('2^') and '-1' in number:
                 is_prime = is_prime_cpu(n, algorithm='lucas-lehmer', p=p, show_progress=verbose)
             else:
-                is_prime = is_prime_cpu(n, algorithm=algorithm, rounds=rounds)
+                is_prime = is_prime_cpu(n, algorithm=algorithm, rounds=rounds, show_progress=verbose)
         
         elapsed_time = time.time() - start_time
         
@@ -123,11 +124,12 @@ def generate(bits, count, mersenne, use_gpu, output):
                 primes.append(p)
                 click.echo(f"Generated: {str(p)[:50]}... ({p.bit_length()} bits)")
         else:
-            click.echo(f"Generating {count} {bits}-bit probable primes...")
-            for i in range(count):
-                p = generate_random_probable_prime(bits)
-                primes.append(p)
-                click.echo(f"Generated: {str(p)[:50]}... ({p.bit_length()} bits)")
+            with GenerationProgress(count, bits, "random") as progress:
+                for i in range(count):
+                    p = generate_random_probable_prime(bits)
+                    primes.append(p)
+                    progress.update_tested(is_prime=True)
+                    click.echo(f"Generated: {str(p)[:50]}... ({p.bit_length()} bits)")
     
     # Save to file if requested
     if output:
@@ -154,37 +156,43 @@ def batch(input_file, algorithm, use_gpu, output, verbose):
     with open(input_file, 'r') as f:
         numbers = [line.strip() for line in f if line.strip()]
     
-    click.echo(f"Testing {len(numbers)} numbers...")
-    
-    for i, number_str in enumerate(numbers):
-        if verbose:
-            click.echo(f"\nTesting number {i+1}/{len(numbers)}: {number_str[:50]}...")
-        
-        try:
-            # Parse number (similar to check command)
-            if number_str.startswith('2^') and '-1' in number_str:
-                p = int(number_str[2:number_str.index('-1')])
-                n = generate_mersenne_candidate(p)
-            else:
-                n = mpz(number_str)
-            
-            # Test primality
-            if use_gpu and GPU_AVAILABLE:
-                is_prime = is_prime_gpu(n, algorithm=algorithm)
-            else:
-                is_prime = is_prime_cpu(n, algorithm=algorithm)
-            
-            results.append((number_str, is_prime))
-            
+    with BatchProgress(len(numbers), "Testing") as progress:
+        for i, number_str in enumerate(numbers):
             if verbose:
-                status = "PRIME" if is_prime else "COMPOSITE"
-                color = 'green' if is_prime else 'red'
-                click.echo(click.style(status, fg=color))
+                click.echo(f"\nTesting number {i+1}/{len(numbers)}: {number_str[:50]}...")
+            
+            try:
+                # Parse number (similar to check command)
+                if number_str.startswith('2^') and '-1' in number_str:
+                    p = int(number_str[2:number_str.index('-1')])
+                    n = generate_mersenne_candidate(p)
+                else:
+                    n = mpz(number_str)
                 
-        except Exception as e:
-            results.append((number_str, f"ERROR: {str(e)}"))
-            if verbose:
-                click.echo(click.style(f"ERROR: {str(e)}", fg='yellow'))
+                # Test primality
+                if use_gpu and GPU_AVAILABLE:
+                    is_prime = is_prime_gpu(n, algorithm=algorithm)
+                else:
+                    is_prime = is_prime_cpu(n, algorithm=algorithm, show_progress=False)  # Don't show individual progress in batch
+                
+                results.append((number_str, is_prime))
+                
+                # Update progress
+                if is_prime:
+                    progress.update_result("prime")
+                else:
+                    progress.update_result("composite")
+                
+                if verbose:
+                    status = "PRIME" if is_prime else "COMPOSITE"
+                    color = 'green' if is_prime else 'red'
+                    click.echo(click.style(status, fg=color))
+                    
+            except Exception as e:
+                results.append((number_str, f"ERROR: {str(e)}"))
+                progress.update_result("error")
+                if verbose:
+                    click.echo(click.style(f"ERROR: {str(e)}", fg='yellow'))
     
     # Summary
     prime_count = sum(1 for _, result in results if result is True)
