@@ -80,11 +80,22 @@ docker-compose up prime-checker-test
 ## Development Workflow
 
 1. **Environment Setup**: Always work within the virtual environment (`source venv/bin/activate`)
-2. **Testing**: Always run `pytest` before committing changes
+2. **Testing**: ALWAYS run tests after making changes:
+   ```bash
+   # Quick test run
+   source venv/bin/activate && pytest
+   
+   # Full test with coverage
+   source venv/bin/activate && pytest --cov=prime_checker --cov-report=html
+   
+   # Test specific changes
+   source venv/bin/activate && pytest tests/test_cpu_algorithms.py -v
+   ```
 3. **Type Checking**: Code uses type hints extensively
 4. **Large Numbers**: Use `gmpy2.mpz` for arbitrary precision arithmetic
 5. **GPU Code**: GPU functionality is optional and gracefully falls back to CPU
 6. **CLI Design**: All functionality is accessible through the `prime-check` command
+7. **Progress Integration**: When adding new algorithms, integrate with progress system from `progress.py`
 
 ## Key Implementation Details
 
@@ -110,3 +121,33 @@ docker-compose up prime-checker-test
 - **Batch Operations**: Tracks overall progress and individual results
 - **Time Estimation**: Uses completion ratio to estimate remaining time
 - **Percentage Precision**: Displays progress with 2 decimal places (e.g., 67.24%)
+
+## Testing Guidelines
+
+### When to Run Tests
+- **ALWAYS** after modifying algorithm code
+- **ALWAYS** before committing changes
+- **ALWAYS** after adding new features
+- After updating dependencies
+- Before creating pull requests
+
+### Test Coverage Requirements
+- All new algorithms must have unit tests
+- CLI commands must have integration tests
+- Progress functionality must be tested
+- Error handling must be tested
+
+### Test Categories to Run
+```bash
+# After algorithm changes
+pytest tests/test_cpu_algorithms.py tests/test_utils.py
+
+# After CLI changes  
+pytest tests/test_cli.py tests/test_standalone_script.py
+
+# After progress system changes
+pytest tests/test_progress.py
+
+# Full test suite (required before commit)
+pytest --cov=prime_checker
+```

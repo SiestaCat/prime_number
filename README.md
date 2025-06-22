@@ -172,6 +172,56 @@ Example progress output:
 Lucas-Lehmer M127 (67.24%):  67%|██████▋   | 84/125 [00:00<00:00, 15086.78iter/s] 67.24%
 ```
 
+## Testing
+
+### Running Tests
+
+```bash
+# Setup environment (if not done already)
+./create_venv.sh
+
+# Run all tests
+source venv/bin/activate && pytest
+
+# Run tests with verbose output
+source venv/bin/activate && pytest -v
+
+# Run tests with coverage report
+source venv/bin/activate && pytest --cov=prime_checker --cov-report=html
+
+# Run specific test file
+source venv/bin/activate && pytest tests/test_cpu_algorithms.py
+
+# Run tests for specific functionality
+source venv/bin/activate && pytest tests/test_progress.py -v
+source venv/bin/activate && pytest tests/test_standalone_script.py -v
+
+# Run tests excluding slow ones
+source venv/bin/activate && pytest -m "not slow"
+
+# Run only GPU tests (if GPU available)
+source venv/bin/activate && pytest -m "gpu"
+```
+
+### Test Categories
+
+- **Unit Tests**: Test individual algorithms and components
+- **Integration Tests**: Test CLI commands and workflows
+- **Progress Tests**: Test progress tracking system
+- **Standalone Tests**: Test the `./prime_check` script
+- **Performance Tests**: Marked as `slow` for large computations
+
+### Docker Testing
+
+```bash
+# Run tests in Docker container
+docker-compose up prime-checker-test
+
+# Or manually
+docker build -f Dockerfile.test -t prime-checker-test .
+docker run --rm prime-checker-test
+```
+
 ## Requirements
 
 - Python 3.8+

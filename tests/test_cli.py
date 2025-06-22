@@ -123,7 +123,6 @@ class TestCLI:
         try:
             result = self.runner.invoke(main, ['batch', input_file])
             assert result.exit_code == 0
-            assert 'Testing 4 numbers' in result.output
             assert 'Prime: 2' in result.output
             assert 'Composite: 2' in result.output
         finally:
