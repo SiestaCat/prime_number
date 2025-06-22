@@ -244,6 +244,117 @@ results = test_numbers_from_file('numbers_to_test.txt', show_progress=True)
 ```
 
 ```python
+# Method 1b: Test numbers from file with GPU support (if available)
+def test_numbers_from_file_gpu(filename, show_progress=True, force_cpu=False):
+    """Test prime numbers from a text file with GPU support."""
+    results = []
+    
+    # Check GPU availability first
+    gpu_available = False
+    if not force_cpu:
+        try:
+            from prime_checker.gpu_algorithms import is_prime_gpu, GPU_AVAILABLE
+            import cupy as cp
+            # Test GPU
+            test_array = cp.array([1, 2, 3])
+            test_array.sum()
+            gpu_available = GPU_AVAILABLE
+            print(f"🎮 GPU acceleration: {'✅ Available' if gpu_available else '❌ Not available'}")
+        except Exception as e:
+            print(f"🎮 GPU test failed: {e}")
+            print("💻 Falling back to CPU mode")
+            gpu_available = False
+    else:
+        print("💻 Using CPU mode (forced)")
+    
+    # Read numbers from file
+    with open(filename, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    
+    print(f"Testing {len(lines)} numbers from {filename}:")
+    print(f"Acceleration: {'GPU' if gpu_available else 'CPU'}")
+    print("-" * 60)
+    
+    for i, line in enumerate(lines):
+        print(f"\n[{i+1}/{len(lines)}] Testing: {line[:50]}{'...' if len(line) > 50 else ''}")
+        
+        try:
+            # Parse different number formats
+            if line.startswith('2^') and '-1' in line:
+                # Mersenne number format: 2^p-1
+                p = int(line[2:line.index('-1')])
+                n = 2**p - 1
+                print(f"  Mersenne M{p} = 2^{p} - 1")
+                print(f"  Number has {len(str(n))} decimal digits")
+                
+                # GPU doesn't support Lucas-Lehmer yet, use CPU
+                if gpu_available:
+                    print("  Using CPU for Mersenne (Lucas-Lehmer)")
+                from prime_checker.cpu_algorithms import is_prime_cpu
+                result = is_prime_cpu(n, algorithm='lucas-lehmer', p=p, show_progress=show_progress)
+                
+            elif '**' in line or '+' in line or '-' in line:
+                # Expression format
+                n = eval(line)
+                print(f"  Evaluated to: {str(n)[:100]}{'...' if len(str(n)) > 100 else ''}")
+                
+                # Try GPU first, fallback to CPU
+                if gpu_available:
+                    try:
+                        print("  Using GPU acceleration")
+                        result = is_prime_gpu(n, show_progress=show_progress)
+                    except Exception as gpu_error:
+                        print(f"  GPU failed ({gpu_error}), using CPU")
+                        from prime_checker.cpu_algorithms import is_prime_cpu
+                        result = is_prime_cpu(n, show_progress=show_progress)
+                else:
+                    from prime_checker.cpu_algorithms import is_prime_cpu
+                    result = is_prime_cpu(n, show_progress=show_progress)
+                    
+            else:
+                # Regular number
+                n = int(line)
+                
+                # Try GPU first, fallback to CPU
+                if gpu_available:
+                    try:
+                        print("  Using GPU acceleration")
+                        result = is_prime_gpu(n, show_progress=show_progress)
+                    except Exception as gpu_error:
+                        print(f"  GPU failed ({gpu_error}), using CPU")
+                        from prime_checker.cpu_algorithms import is_prime_cpu
+                        result = is_prime_cpu(n, show_progress=show_progress)
+                else:
+                    from prime_checker.cpu_algorithms import is_prime_cpu
+                    result = is_prime_cpu(n, show_progress=show_progress)
+            
+            status = "PRIME" if result else "COMPOSITE"
+            color = "✅" if result else "❌"
+            acceleration = "🎮" if gpu_available else "💻"
+            print(f"  Result: {color} {status} {acceleration}")
+            
+            results.append((line, result, None))
+            
+        except Exception as e:
+            print(f"  Result: ⚠️ ERROR - {str(e)}")
+            results.append((line, None, str(e)))
+    
+    return results
+
+# Test with GPU (if available) or CPU fallback
+print("\n" + "="*50)
+print("TESTING WITH GPU/CPU AUTO-SELECTION")
+print("="*50)
+results_gpu = test_numbers_from_file_gpu('numbers_to_test.txt', show_progress=True)
+
+# Force CPU-only test for comparison
+print("\n" + "="*50)
+print("TESTING WITH CPU-ONLY (FOR COMPARISON)")
+print("="*50)
+results_cpu = test_numbers_from_file_gpu('numbers_to_test.txt', show_progress=True, force_cpu=True)
+```
+
+```python
 # Method 2: Upload your own file from local computer
 from google.colab import files
 
