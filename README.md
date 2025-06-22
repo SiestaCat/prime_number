@@ -222,6 +222,21 @@ docker build -f Dockerfile.test -t prime-checker-test .
 docker run --rm prime-checker-test
 ```
 
+## Google Colab Usage
+
+You can run this library in Google Colab for cloud-based prime number testing. See [GOOGLE_COLAB.md](GOOGLE_COLAB.md) for detailed instructions and examples.
+
+Quick start in Colab:
+```python
+!pip install gmpy2 numpy click tqdm
+!git clone https://github.com/YOUR_USERNAME/prime_number.git
+%cd prime_number
+!pip install -e .
+
+from prime_checker import is_prime_cpu
+print(f"97 is prime: {is_prime_cpu(97)}")
+```
+
 ## Requirements
 
 - Python 3.8+
