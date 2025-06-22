@@ -1,0 +1,1 @@
+"""Test suite for prime number checker."""

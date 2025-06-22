@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  prime-checker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prime-number-checker:latest
+    container_name: prime-checker
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+    command: ["--help"]
+    
+  prime-checker-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: prime-number-checker:test
+    container_name: prime-checker-test
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./tests:/app/tests
+      - ./coverage:/app/coverage
+    command: ["pytest", "-v", "--cov=prime_checker", "--cov-report=html:coverage/html", "--cov-report=term"]
