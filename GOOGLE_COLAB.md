@@ -194,6 +194,16 @@ print("Created numbers_to_test.txt with sample numbers")
 # Method 1: Test numbers from file with progress tracking
 def test_numbers_from_file(filename, show_progress=True):
     """Test prime numbers from a text file."""
+    import sys
+    
+    # Increase string conversion limit for very large numbers
+    try:
+        sys.set_int_max_str_digits(200000)  # Allow up to 200k digits
+        print("📏 Increased digit limit to 200,000 for large numbers")
+    except AttributeError:
+        # Older Python versions don't have this limit
+        print("📏 No digit limit (older Python version)")
+    
     results = []
     
     # Read numbers from file
@@ -247,6 +257,16 @@ results = test_numbers_from_file('numbers_to_test.txt', show_progress=True)
 # Method 1b: Test numbers from file with GPU support (if available)
 def test_numbers_from_file_gpu(filename, show_progress=True, force_cpu=False):
     """Test prime numbers from a text file with GPU support."""
+    import sys
+    
+    # Increase string conversion limit for very large numbers
+    try:
+        sys.set_int_max_str_digits(200000000000000000)
+        print("📏 Increased digit limit for large numbers")
+    except AttributeError:
+        # Older Python versions don't have this limit
+        print("📏 No digit limit (older Python version)")
+    
     results = []
     
     # Check GPU availability first
@@ -296,10 +316,25 @@ def test_numbers_from_file_gpu(filename, show_progress=True, force_cpu=False):
             elif '**' in line or '+' in line or '-' in line:
                 # Expression format
                 n = eval(line)
-                print(f"  Evaluated to: {str(n)[:100]}{'...' if len(str(n)) > 100 else ''}")
                 
-                # Try GPU first, fallback to CPU
-                if gpu_available:
+                # Handle very large numbers
+                try:
+                    n_str = str(n)
+                    digit_count = len(n_str)
+                    print(f"  Evaluated to: {n_str[:100]}{'...' if len(n_str) > 100 else ''}")
+                    print(f"  Number has {digit_count:,} decimal digits")
+                except Exception:
+                    # If string conversion fails, estimate digit count
+                    bit_length = n.bit_length()
+                    estimated_digits = int(bit_length * 0.30103)  # log10(2) ≈ 0.30103
+                    print(f"  Very large number (estimated {estimated_digits:,} digits)")
+                
+                # Check if number is too large for GPU
+                if gpu_available and n.bit_length() > 64:
+                    print("  Number too large for GPU, using CPU")
+                    from prime_checker.cpu_algorithms import is_prime_cpu
+                    result = is_prime_cpu(n, show_progress=show_progress)
+                elif gpu_available:
                     try:
                         print("  Using GPU acceleration")
                         result = is_prime_gpu(n, show_progress=show_progress)
@@ -313,10 +348,20 @@ def test_numbers_from_file_gpu(filename, show_progress=True, force_cpu=False):
                     
             else:
                 # Regular number
-                n = int(line)
+                try:
+                    n = int(line)
+                    digit_count = len(line)
+                    print(f"  Regular number ({digit_count:,} digits)")
+                except ValueError:
+                    print(f"  Error: Cannot parse '{line}' as number")
+                    raise
                 
-                # Try GPU first, fallback to CPU
-                if gpu_available:
+                # Check if number is too large for GPU
+                if gpu_available and n.bit_length() > 64:
+                    print("  Number too large for GPU, using CPU")
+                    from prime_checker.cpu_algorithms import is_prime_cpu
+                    result = is_prime_cpu(n, show_progress=show_progress)
+                elif gpu_available:
                     try:
                         print("  Using GPU acceleration")
                         result = is_prime_gpu(n, show_progress=show_progress)
@@ -651,6 +696,65 @@ from google.colab import files
 files.download('prime_test_results.txt')
 ```
 
+### Handling Extremely Large Numbers
+
+```python
+# For numbers with 100,000+ digits, use this enhanced version
+import sys
+
+def test_massive_numbers(filename):
+    """Handle numbers with hundreds of thousands of digits."""
+    
+    # Set maximum digit limit (Python 3.11+)
+    try:
+        sys.set_int_max_str_digits(500000)  # Up to 500k digits
+        print("📏 Set digit limit to 500,000")
+    except AttributeError:
+        print("📏 Using unlimited digits (older Python)")
+    
+    with open(filename, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    
+    for i, line in enumerate(lines):
+        print(f"\n[{i+1}/{len(lines)}] Processing massive number...")
+        
+        try:
+            # Parse the number without converting to string initially
+            if '**' in line or '+' in line:
+                n = eval(line)
+            else:
+                n = int(line)
+            
+            # Estimate size without string conversion
+            bit_length = n.bit_length()
+            estimated_digits = int(bit_length * 0.30103)
+            
+            print(f"  Estimated digits: {estimated_digits:,}")
+            print(f"  Bit length: {bit_length:,}")
+            
+            # Only use CPU for massive numbers
+            if estimated_digits > 50000:
+                print("  ⚠️ Massive number detected - this may take a while")
+                print("  Using optimized CPU algorithms")
+                
+                # Use fewer rounds for very large numbers
+                from prime_checker.cpu_algorithms import is_prime_cpu
+                result = is_prime_cpu(n, algorithm='miller-rabin', rounds=10, show_progress=True)
+            else:
+                from prime_checker.cpu_algorithms import is_prime_cpu
+                result = is_prime_cpu(n, show_progress=True)
+            
+            print(f"  Result: {'✅ PRIME' if result else '❌ COMPOSITE'}")
+            
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+            if "string conversion" in str(e):
+                print("  💡 Try: sys.set_int_max_str_digits(1000000)")
+
+# Example usage
+# test_massive_numbers('huge_numbers.txt')
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -696,6 +800,20 @@ result = is_prime_cpu(number, show_progress=False)
 
 # Install without GPU dependencies
 !pip install gmpy2 numpy click tqdm  # Skip cupy
+```
+
+6. **String conversion limit error (very large numbers):**
+```python
+# Error: "Exceeds the limit (4300 digits) for integer string conversion"
+# Solution: Increase the digit limit
+
+import sys
+sys.set_int_max_str_digits(200000)  # Allow up to 200k digits
+
+# Or disable the limit entirely (Python 3.11+)
+sys.set_int_max_str_digits(0)  # No limit
+
+# For older Python versions, this error doesn't occur
 ```
 
 ### Performance Considerations
